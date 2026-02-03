@@ -1,182 +1,84 @@
 import pytest
 from selenium import webdriver
 from selenium.webdriver.common.by import By
-from selenium.common.exceptions import TimeoutException, NoSuchElementException
-import time
-
-# --- PyTest Fixtures for Setup/Teardown and Preconditions ---
 
 @pytest.fixture(scope="function")
 def driver():
-    # Setup: Initialize WebDriver
     driver = webdriver.Chrome()
-    driver.maximize_window()
     yield driver
-    # Teardown: Quit WebDriver
     driver.quit()
 
-@pytest.fixture(scope="function")
-def login_user(driver):
-    # Precondition: User is logged in and has a valid payment method
-    driver.get("https://payment-portal.example.com/login")
-    driver.find_element(By.ID, "username").send_keys("testuser")
-    driver.find_element(By.ID, "password").send_keys("Test@1234")
+def login(driver, username, password):
+    driver.get("http://your-app-url.com/login")
+    driver.find_element(By.ID, "username").send_keys(username)
+    driver.find_element(By.ID, "password").send_keys(password)
     driver.find_element(By.ID, "loginBtn").click()
-    # Wait for dashboard or payment method check
-    assert "dashboard" in driver.current_url.lower()
-    # Optionally verify payment method
-    driver.get("https://payment-portal.example.com/profile")
-    assert driver.find_element(By.ID, "payment-method").is_displayed()
 
-# --- Test Case: TC-001 Verify Successful Payment Authorization ---
+def test_TC_01_verify_login_with_valid_credentials(driver):
+    """Verify login with valid credentials"""
+    driver.get("http://your-app-url.com/login")
+    driver.find_element(By.ID, "username").send_keys("valid_user")
+    driver.find_element(By.ID, "password").send_keys("valid_pass")
+    driver.find_element(By.ID, "loginBtn").click()
+    assert "dashboard" in driver.current_url.lower() or driver.find_element(By.ID, "dashboard").is_displayed()
 
-def test_tc_001_successful_payment_authorization(driver, login_user):
-    """
-    TC-001: Verify Successful Payment Authorization
-    Preconditions: User is logged in and has a valid payment method.
-    """
-    driver.get("https://payment-portal.example.com/payments")
-    driver.find_element(By.ID, "card-number").send_keys("4111111111111111")
-    driver.find_element(By.ID, "card-expiry").send_keys("12/28")
-    driver.find_element(By.ID, "card-cvc").send_keys("123")
-    driver.find_element(By.ID, "submit-payment").click()
-    # Wait for confirmation
-    try:
-        confirmation = driver.find_element(By.ID, "payment-confirmation")
-        assert "authorized" in confirmation.text.lower() or "confirmation" in confirmation.text.lower()
-    except NoSuchElementException:
-        pytest.fail("Payment confirmation not displayed.")
+def test_TC_02_verify_login_with_invalid_password(driver):
+    """Verify login with invalid password"""
+    driver.get("http://your-app-url.com/login")
+    driver.find_element(By.ID, "username").send_keys("valid_user")
+    driver.find_element(By.ID, "password").send_keys("invalid_pass")
+    driver.find_element(By.ID, "loginBtn").click()
+    assert driver.find_element(By.ID, "errorMsg").is_displayed()
 
-# --- Test Case: TC-002 Verify Authorization Timeout Handling ---
+def test_TC_03_verify_login_with_empty_fields(driver):
+    """Verify login with empty fields"""
+    driver.get("http://your-app-url.com/login")
+    driver.find_element(By.ID, "loginBtn").click()
+    assert driver.find_element(By.ID, "validationMsg").is_displayed()
 
-def test_tc_002_authorization_timeout_handling(driver, login_user):
-    """
-    TC-002: Verify Authorization Timeout Handling
-    Preconditions: User is logged in; payment gateway is accessible.
-    """
-    driver.get("https://payment-portal.example.com/payments")
-    driver.find_element(By.ID, "card-number").send_keys("4111111111111111")
-    driver.find_element(By.ID, "card-expiry").send_keys("12/28")
-    driver.find_element(By.ID, "card-cvc").send_keys("123")
-    # Simulate network delay or slow gateway response
-    driver.execute_script("window.simulatePaymentGatewayDelay = true;")
-    driver.find_element(By.ID, "submit-payment").click()
-    # Wait for timeout error
-    try:
-        timeout_msg = driver.find_element(By.ID, "payment-timeout-error")
-        assert "timeout" in timeout_msg.text.lower()
-    except NoSuchElementException:
-        pytest.fail("Timeout error message not displayed.")
-    finally:
-        # Reset simulation
-        driver.execute_script("window.simulatePaymentGatewayDelay = false;")
+def test_TC_04_verify_application_url_opens(driver):
+    """Verify application URL opens in browser"""
+    driver.get("http://your-app-url.com")
+    assert "your-app" in driver.title.lower() or driver.find_element(By.ID, "mainApp").is_displayed()
 
-# --- Test Case: TC-003 Verify Retry Option on Timeout ---
+def test_TC_05_verify_dashboard_link_navigation(driver):
+    """Verify dashboard link navigation"""
+    login(driver, "valid_user", "valid_pass")
+    driver.find_element(By.ID, "dashboardLink").click()
+    assert "dashboard" in driver.current_url.lower() or driver.find_element(By.ID, "dashboard").is_displayed()
 
-def test_tc_003_retry_option_on_timeout(driver, login_user):
-    """
-    TC-003: Verify Retry Option on Timeout
-    Preconditions: Timeout scenario as per TC-002.
-    """
-    driver.get("https://payment-portal.example.com/payments")
-    driver.find_element(By.ID, "card-number").send_keys("4111111111111111")
-    driver.find_element(By.ID, "card-expiry").send_keys("12/28")
-    driver.find_element(By.ID, "card-cvc").send_keys("123")
-    # Simulate timeout
-    driver.execute_script("window.simulatePaymentGatewayDelay = true;")
-    driver.find_element(By.ID, "submit-payment").click()
-    time.sleep(5)  # Wait for timeout to trigger
-    try:
-        retry_prompt = driver.find_element(By.ID, "retry-payment-prompt")
-        assert "retry" in retry_prompt.text.lower() or "cancel" in retry_prompt.text.lower()
-    except NoSuchElementException:
-        pytest.fail("Retry/cancel prompt not displayed after timeout.")
-    finally:
-        driver.execute_script("window.simulatePaymentGatewayDelay = false;")
+def test_TC_06_verify_broken_link_behavior(driver):
+    """Verify broken link behavior"""
+    driver.get("http://your-app-url.com")
+    driver.find_element(By.ID, "targetLink").click()
+    assert "error" not in driver.page_source.lower()
 
-# --- Test Case: TC-004 Verify Logging on Authorization Timeout ---
+def test_TC_07_submit_form_with_valid_data(driver):
+    """Submit form with valid data"""
+    driver.get("http://your-app-url.com/form")
+    driver.find_element(By.ID, "name").send_keys("John Doe")
+    driver.find_element(By.ID, "email").send_keys("john@example.com")
+    driver.find_element(By.ID, "submitBtn").click()
+    assert driver.find_element(By.ID, "successMsg").is_displayed()
 
-def test_tc_004_logging_on_authorization_timeout(driver, login_user):
-    """
-    TC-004: Verify Logging on Authorization Timeout
-    Preconditions: System logging enabled.
-    """
-    # Trigger timeout as before
-    driver.get("https://payment-portal.example.com/payments")
-    driver.find_element(By.ID, "card-number").send_keys("4111111111111111")
-    driver.find_element(By.ID, "card-expiry").send_keys("12/28")
-    driver.find_element(By.ID, "card-cvc").send_keys("123")
-    driver.execute_script("window.simulatePaymentGatewayDelay = true;")
-    driver.find_element(By.ID, "submit-payment").click()
-    time.sleep(5)
-    # Access system logs (assume admin panel or API endpoint)
-    # This is a placeholder; in real case, use API or log file access
-    logs = fetch_system_logs(user="testuser")
-    assert any("timeout" in log.lower() and "testuser" in log.lower() for log in logs), \
-        "Timeout event not found in system logs."
-    driver.execute_script("window.simulatePaymentGatewayDelay = false;")
+def test_TC_08_submit_form_with_empty_mandatory_fields(driver):
+    """Submit form with empty mandatory fields"""
+    driver.get("http://your-app-url.com/form")
+    driver.find_element(By.ID, "submitBtn").click()
+    assert driver.find_element(By.ID, "errorMsg").is_displayed()
 
-def fetch_system_logs(user):
-    # Placeholder for log retrieval logic (API, DB, or file)
-    # In production, replace with actual log access
-    return [
-        "2024-06-01 10:15:23 - User testuser - Payment authorization timeout.",
-        "2024-06-01 10:16:00 - User testuser - Payment retried."
-    ]
+def test_TC_09_verify_page_title(driver):
+    """Verify page title"""
+    driver.get("http://your-app-url.com")
+    assert driver.title == "Expected Page Title"
 
-# --- Test Case: TC-005 Verify Notification to User on Timeout ---
+def test_TC_10_verify_logo_visibility(driver):
+    """Verify logo visibility"""
+    driver.get("http://your-app-url.com")
+    assert driver.find_element(By.ID, "logo").is_displayed()
 
-def test_tc_005_notification_on_timeout(driver, login_user):
-    """
-    TC-005: Verify Notification to User on Timeout
-    Preconditions: Notification service is configured.
-    """
-    driver.get("https://payment-portal.example.com/payments")
-    driver.find_element(By.ID, "card-number").send_keys("4111111111111111")
-    driver.find_element(By.ID, "card-expiry").send_keys("12/28")
-    driver.find_element(By.ID, "card-cvc").send_keys("123")
-    driver.execute_script("window.simulatePaymentGatewayDelay = true;")
-    driver.find_element(By.ID, "submit-payment").click()
-    time.sleep(5)
-    # Check for notification (email/SMS/app) - placeholder/mock
-    notification = check_user_notification("testuser", "timeout")
-    assert notification, "User did not receive timeout notification."
-    driver.execute_script("window.simulatePaymentGatewayDelay = false;")
-
-def check_user_notification(user, event_type):
-    # Placeholder for notification check (could be via API, DB, or inbox)
-    # In production, implement actual verification
-    if event_type == "timeout":
-        return True  # Simulate notification received
-    return False
-
-# --- Test Case: TC-006 Verify No Double-Charge on Timeout and Retry ---
-
-def test_tc_006_no_double_charge_on_timeout_and_retry(driver, login_user):
-    """
-    TC-006: Verify No Double-Charge on Timeout and Retry
-    Preconditions: Same user, same transaction context.
-    """
-    driver.get("https://payment-portal.example.com/payments")
-    driver.find_element(By.ID, "card-number").send_keys("4111111111111111")
-    driver.find_element(By.ID, "card-expiry").send_keys("12/28")
-    driver.find_element(By.ID, "card-cvc").send_keys("123")
-    driver.execute_script("window.simulatePaymentGatewayDelay = true;")
-    driver.find_element(By.ID, "submit-payment").click()
-    time.sleep(5)
-    # Retry payment after timeout
-    driver.execute_script("window.simulatePaymentGatewayDelay = false;")
-    driver.find_element(By.ID, "retry-payment-btn").click()
-    time.sleep(2)
-    # Check transaction history
-    transactions = fetch_transaction_history("testuser")
-    assert sum(1 for t in transactions if t["status"] == "Success" and t["amount"] == 100) == 1, \
-        "More than one successful transaction found; possible double-charge."
-
-def fetch_transaction_history(user):
-    # Placeholder for transaction history retrieval (API, DB)
-    # In production, implement actual check
-    return [
-        {"txn_id": "TXN123", "status": "Success", "amount": 100, "user": "testuser"},
-        {"txn_id": "TXN124", "status": "Failed", "amount": 100, "user": "testuser"}
-    ]
+def test_TC_11_verify_logout_functionality(driver):
+    """Verify logout functionality"""
+    login(driver, "valid_user", "valid_pass")
+    driver.find_element(By.ID, "logoutBtn").click()
+    assert "login" in driver.current_url.lower() or driver.find_element(By.ID, "loginBtn").is_displayed()
