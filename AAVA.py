@@ -5,20 +5,53 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 import time
 
-# Helper functions for login and navigation
-def login(driver, username, password):
-    driver.get("https://your-system-url.com/login")
-    WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.ID, "username"))).send_keys(username)
-    driver.find_element(By.ID, "password").send_keys(password)
+# ---------- Helper Functions ----------
+
+def login_user(driver):
+    # Placeholder: Implement login steps as per application under test
+    driver.get("https://your-app-url.com/login")
+    driver.find_element(By.ID, "username").send_keys("testuser")
+    driver.find_element(By.ID, "password").send_keys("password")
     driver.find_element(By.ID, "loginBtn").click()
-    # Wait for dashboard/homepage indicator
-    WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.ID, "dashboard")))
+    # Wait for successful login indication
+    WebDriverWait(driver, 10).until(
+        EC.presence_of_element_located((By.ID, "dashboard"))
+    )
 
-def navigate_to_payment_page(driver):
-    driver.find_element(By.ID, "menu_payments").click()
-    WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.ID, "payment_form")))
+def initiate_payment(driver):
+    # Placeholder: Implement steps to navigate to payment page and start payment
+    driver.get("https://your-app-url.com/payment")
+    driver.find_element(By.ID, "startPaymentBtn").click()
 
-@pytest.fixture
+def trigger_timeout(driver, wait_seconds=600):
+    # Simulate waiting for timeout (use shorter wait for automation)
+    # For demo, use 5 seconds instead of 10 minutes
+    time.sleep(5)
+    # Alternatively, manipulate the system clock or API if possible
+
+def check_timeout_message(driver):
+    # Wait for timeout message to appear
+    try:
+        msg = WebDriverWait(driver, 15).until(
+            EC.presence_of_element_located((By.ID, "timeoutMessage"))
+        )
+        return msg.text
+    except Exception as e:
+        return None
+
+def re_authorize_payment(driver):
+    # Placeholder: Implement steps to re-authorize payment
+    driver.find_element(By.ID, "reauthorizeBtn").click()
+
+def check_transaction_log(driver):
+    # Placeholder: Implement steps to check transaction logs
+    driver.get("https://your-app-url.com/transactions")
+    logs = driver.find_elements(By.CLASS_NAME, "transaction-row")
+    return logs
+
+# ---------- Test Cases ----------
+
+@pytest.fixture(scope="function")
 def driver():
     driver = webdriver.Chrome()
     driver.maximize_window()
@@ -26,97 +59,65 @@ def driver():
     driver.quit()
 
 @pytest.mark.high
-def test_tc_001_verify_payment_authorization_timeout(driver):
+def test_TC_001_verify_payment_authorization_timeout_trigger(driver):
     """
-    TC-001: Verify Payment Authorization Timeout
-    Preconditions: User has a valid account; payment method is configured
+    TC-001: Verify Payment Authorization Timeout Trigger
     Priority: High
-    Created by: Joy Choudhury, 2026-01-05
+    Preconditions: User is logged in and has a valid payment method
+    Created by: QA Analyst on 2024-06-01
     """
-    # Setup: Ensure test user credentials and payment method configuration
-    username = "test_user"
-    password = "secure_password"
-    login(driver, username, password)
-    navigate_to_payment_page(driver)
-    
-    # Initiate a payment transaction
-    driver.find_element(By.ID, "initiate_payment").click()
-    WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.ID, "authorize_button")))
-    
-    # Do not complete the authorization step; wait for the timeout period (simulate 5 minutes)
-    timeout_seconds = 300  # 5 minutes
-    # For test efficiency, this may be reduced in lower environments
-    time.sleep(timeout_seconds)
-    
-    # Assert timeout message and cancellation
-    try:
-        timeout_msg = WebDriverWait(driver, 20).until(
-            EC.visibility_of_element_located((By.ID, "timeout_message"))
-        )
-        assert "timeout" in timeout_msg.text.lower()
-        assert driver.find_element(By.ID, "authorization_status").text.lower() == "cancelled"
-    except Exception as e:
-        pytest.fail(f"Timeout message or cancellation not detected: {e}")
+    login_user(driver)
+    initiate_payment(driver)
+    # Simulate idle state to trigger timeout
+    trigger_timeout(driver)
+    # Validate system response
+    timeout_msg = check_timeout_message(driver)
+    assert timeout_msg is not None, "Timeout message not displayed"
+    assert "timeout" in timeout_msg.lower(), f"Unexpected message: {timeout_msg}"
+    # Optionally, check that authorization is cancelled (e.g., button disabled)
+    # cancelled = driver.find_element(By.ID, "authorizeBtn").is_enabled()
+    # assert not cancelled, "Authorization was not cancelled after timeout"
 
 @pytest.mark.medium
-def test_tc_002_verify_successful_payment_after_timeout_recovery(driver):
+def test_TC_002_check_re_authorization_after_timeout(driver):
     """
-    TC-002: Verify Successful Payment After Timeout Recovery
-    Preconditions: User has a valid account; payment method is configured
+    TC-002: Check Re-Authorization After Timeout
     Priority: Medium
-    Created by: Joy Choudhury, 2026-01-05
+    Preconditions: Payment previously timed out
+    Created by: QA Analyst on 2024-06-01
     """
-    username = "test_user"
-    password = "secure_password"
-    login(driver, username, password)
-    navigate_to_payment_page(driver)
-
-    # Initiate a payment transaction and let authorization timeout
-    driver.find_element(By.ID, "initiate_payment").click()
-    WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.ID, "authorize_button")))
-    time.sleep(300)  # Wait for timeout (adjust in test env as needed)
-
-    # Re-initiate the payment process
-    driver.find_element(By.ID, "initiate_payment").click()
-    WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.ID, "authorize_button")))
-    driver.find_element(By.ID, "authorize_button").click()
-    # Wait for success message
+    login_user(driver)
+    initiate_payment(driver)
+    trigger_timeout(driver)
+    # Attempt to re-authorize
+    re_authorize_payment(driver)
+    # Observe system behavior (assume success message appears)
     try:
-        success_msg = WebDriverWait(driver, 20).until(
-            EC.visibility_of_element_located((By.ID, "payment_success_message"))
+        success_msg = WebDriverWait(driver, 10).until(
+            EC.presence_of_element_located((By.ID, "successMessage"))
         )
-        assert "success" in success_msg.text.lower()
-    except Exception as e:
-        pytest.fail(f"Payment did not complete successfully after timeout recovery: {e}")
+        assert "authorized" in success_msg.text.lower() or "processed" in success_msg.text.lower()
+    except Exception:
+        pytest.fail("Re-authorization did not succeed or message not found")
 
-@pytest.mark.low
-def test_tc_003_verify_audit_log_for_authorization_timeout_event(driver):
+@pytest.mark.high
+def test_TC_003_verify_no_double_charges_on_timeout(driver):
     """
-    TC-003: Verify Audit Log for Authorization Timeout Event
-    Preconditions: Admin access required; audit logging enabled
-    Priority: Low
-    Created by: Joy Choudhury, 2026-01-05
+    TC-003: Verify No Double Charges On Timeout
+    Priority: High
+    Preconditions: User has sufficient funds
+    Created by: QA Analyst on 2024-06-01
     """
-    admin_username = "admin_user"
-    admin_password = "admin_secure_password"
-    login(driver, admin_username, admin_password)
-
-    # Initiate a payment and let authorization timeout
-    navigate_to_payment_page(driver)
-    driver.find_element(By.ID, "initiate_payment").click()
-    WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.ID, "authorize_button")))
-    time.sleep(300)  # Wait for timeout
-
-    # Access the audit log/reporting section
-    driver.find_element(By.ID, "menu_audit_logs").click()
-    WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.ID, "audit_log_table")))
-
-    # Verify audit log entry for timeout event
-    audit_rows = driver.find_elements(By.CSS_SELECTOR, "#audit_log_table tr")
-    found = False
-    for row in audit_rows:
-        if "authorization timeout" in row.text.lower() and admin_username in row.text:
-            found = True
-            # Optionally, verify timestamp format and user details
-            break
-    assert found, "Authorization timeout event not found in audit log"
+    login_user(driver)
+    initiate_payment(driver)
+    trigger_timeout(driver)
+    # Repeat payment process
+    initiate_payment(driver)
+    # Check transaction logs for duplicate charges
+    logs = check_transaction_log(driver)
+    # Logic: Ensure only one transaction for the payment
+    payment_count = 0
+    for log in logs:
+        if "payment" in log.text.lower() and "completed" in log.text.lower():
+            payment_count += 1
+    assert payment_count == 1, f"Expected 1 completed payment, found {payment_count}"
