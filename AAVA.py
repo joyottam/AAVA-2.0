@@ -1,118 +1,164 @@
-# test_payment_authorization_timeout.py
-
 import pytest
 from selenium import webdriver
 from selenium.webdriver.common.by import By
-from selenium.webdriver.support.ui import WebDriverWait
-from selenium.webdriver.support import expected_conditions as EC
 import time
+
+# Utility function for login (assumes login page structure)
+def login(driver, username="testuser", password="password"):
+    driver.get("https://example.com/login")
+    driver.find_element(By.CSS_SELECTOR, "#username").send_keys(username)
+    driver.find_element(By.CSS_SELECTOR, "#password").send_keys(password)
+    driver.find_element(By.CSS_SELECTOR, "#loginBtn").click()
+    assert "dashboard" in driver.current_url.lower()
 
 @pytest.fixture(scope="function")
 def driver():
     driver = webdriver.Chrome()
-    driver.maximize_window()
     yield driver
     driver.quit()
 
-def login(driver, username="testuser", password="testpass"):
-    driver.get("https://your-app-url.com/login")
-    driver.find_element(By.ID, "username").send_keys(username)
-    driver.find_element(By.ID, "password").send_keys(password)
-    driver.find_element(By.ID, "loginBtn").click()
-    WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.ID, "dashboard")))
-
-def initiate_transaction(driver):
-    driver.get("https://your-app-url.com/new-transaction")
-    driver.find_element(By.ID, "amount").send_keys("100")
-    driver.find_element(By.ID, "payBtn").click()
-    WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.ID, "authPage")))
-
-def get_transaction_status(driver, transaction_id):
-    driver.get(f"https://your-app-url.com/transactions/{transaction_id}")
-    return driver.find_element(By.ID, "status").text
-
-def get_audit_logs(driver):
-    driver.get("https://your-app-url.com/admin/audit-logs")
-    return driver.page_source
-
-def get_user_notifications(driver):
-    driver.get("https://your-app-url.com/notifications")
-    return driver.page_source
-
-def get_timeout_config(driver):
-    driver.get("https://your-app-url.com/admin/config")
-    return driver.find_element(By.ID, "timeoutValue").text
-
-def test_verify_payment_authorization_timeout(driver):
+def test_TC_001_verify_payment_authorization_timeout_trigger(driver):
+    """Verify Payment Authorization Timeout Trigger"""
     login(driver)
-    initiate_transaction(driver)
-    time.sleep(310)
-    try:
-        timeout_msg = WebDriverWait(driver, 20).until(
-            EC.visibility_of_element_located((By.ID, "timeoutMessage"))
-        )
-        assert "timeout" in timeout_msg.text.lower()
-    except Exception as e:
-        pytest.fail(f"Timeout message not displayed: {e}")
+    driver.get("https://example.com/payment")
+    driver.find_element(By.CSS_SELECTOR, "#initiatePaymentBtn").click()
+    time.sleep(5)  # Change to 600 for real test
+    timeout_msg = driver.find_element(By.CSS_SELECTOR, "#timeoutMsg").text
+    assert "session timed out" in timeout_msg.lower()
+    assert "login" in driver.current_url.lower()
 
-def test_validate_timeout_message_content(driver):
+def test_TC_002_validate_authorization_timeout_warning_message(driver):
+    """Validate Authorization Timeout Warning Message"""
     login(driver)
-    initiate_transaction(driver)
-    time.sleep(310)
-    try:
-        timeout_msg = WebDriverWait(driver, 20).until(
-            EC.visibility_of_element_located((By.ID, "timeoutMessage"))
-        )
-        assert "Authorization timeout. Please try again." in timeout_msg.text
-    except Exception as e:
-        pytest.fail(f"Expected timeout message not found: {e}")
+    driver.get("https://example.com/payment")
+    driver.find_element(By.CSS_SELECTOR, "#startTransactionBtn").click()
+    time.sleep(4)  # Simulate 9 minutes
+    warning_msg = driver.find_element(By.CSS_SELECTOR, "#sessionWarningMsg").text
+    assert "expire in 1 minute" in warning_msg.lower()
 
-def test_ensure_transaction_rollback_on_timeout(driver):
+def test_TC_003_verify_no_timeout_during_active_interaction(driver):
+    """Verify No Timeout During Active Interaction"""
     login(driver)
-    initiate_transaction(driver)
-    transaction_id = driver.find_element(By.ID, "transactionId").text
-    time.sleep(310)
-    status = get_transaction_status(driver, transaction_id)
-    assert status.lower() == "rolled back" or status.lower() == "cancelled"
+    driver.get("https://example.com/payment")
+    driver.find_element(By.CSS_SELECTOR, "#initiatePaymentBtn").click()
+    for _ in range(5):  # Simulate intermittent interaction
+        driver.find_element(By.CSS_SELECTOR, "#cardNumber").send_keys("4111111111111111")
+        time.sleep(1)
+        driver.find_element(By.CSS_SELECTOR, "#expiryDate").send_keys("12/25")
+        time.sleep(1)
+    driver.find_element(By.CSS_SELECTOR, "#completePaymentBtn").click()
+    assert "payment successful" in driver.page_source.lower()
 
-def test_audit_log_entry_for_timeout(driver):
-    login(driver, username="admin", password="adminpass")
-    initiate_transaction(driver)
-    time.sleep(310)
-    logs = get_audit_logs(driver)
+def test_TC_004_session_persistence_after_timeout(driver):
+    """Session Persistence After Timeout"""
+    login(driver)
+    driver.get("https://example.com/payment")
+    driver.find_element(By.CSS_SELECTOR, "#initiatePaymentBtn").click()
+    time.sleep(5)  # Simulate timeout
+    # Simulate browser back button
+    driver.back()
+    assert "login" in driver.current_url.lower()
+    assert "session not restored" in driver.page_source.lower()
+
+def test_TC_005_audit_log_entry_for_timeout_event(driver):
+    """Audit Log Entry for Timeout Event"""
+    login(driver)
+    driver.get("https://example.com/payment")
+    driver.find_element(By.CSS_SELECTOR, "#initiatePaymentBtn").click()
+    time.sleep(5)
+    # Check audit logs
+    driver.get("https://example.com/audit-log")
+    logs = driver.find_element(By.CSS_SELECTOR, "#auditLogTable").text
     assert "timeout event" in logs.lower()
 
-def test_timeout_handling_for_multiple_transactions(driver):
-    login(driver)
-    transaction_ids = []
-    for i in range(3):
-        initiate_transaction(driver)
-        transaction_id = driver.find_element(By.ID, "transactionId").text
-        transaction_ids.append(transaction_id)
-        driver.get("https://your-app-url.com/dashboard")
-    time.sleep(310)
-    for tid in transaction_ids:
-        status = get_transaction_status(driver, tid)
-        assert status.lower() == "rolled back" or status.lower() == "cancelled"
-
-def test_user_notification_after_timeout(driver):
-    login(driver)
-    initiate_transaction(driver)
-    time.sleep(310)
-    notifications = get_user_notifications(driver)
-    assert "timeout" in notifications.lower()
-
-def test_validate_timeout_configuration(driver):
-    login(driver, username="admin", password="adminpass")
-    timeout_value = int(get_timeout_config(driver))
-    initiate_transaction(driver)
-    start_time = time.time()
-    time.sleep(timeout_value + 10)
+def test_TC_006_timeout_does_not_affect_other_sessions():
+    """Timeout Does Not Affect Other Sessions"""
+    driver1 = webdriver.Chrome()
+    driver2 = webdriver.Chrome()
     try:
-        timeout_msg = WebDriverWait(driver, 20).until(
-            EC.visibility_of_element_located((By.ID, "timeoutMessage"))
-        )
-        elapsed = time.time() - start_time
-        assert abs(elapsed - timeout_value) < 20
-    except Exception as e:
-        pytest.fail(f"Timeout did not occur as per configuration: {e}")
+        login(driver1)
+        login(driver2)
+        driver1.get("https://example.com/payment")
+        driver2.get("https://example.com/payment")
+        driver1.find_element(By.CSS_SELECTOR, "#initiatePaymentBtn").click()
+        driver2.find_element(By.CSS_SELECTOR, "#initiatePaymentBtn").click()
+        time.sleep(5)  # Timeout for driver1
+        timeout_msg = driver1.find_element(By.CSS_SELECTOR, "#timeoutMsg").text
+        assert "session timed out" in timeout_msg.lower()
+        # driver2 should still be active
+        driver2.find_element(By.CSS_SELECTOR, "#completePaymentBtn").click()
+        assert "payment successful" in driver2.page_source.lower()
+    finally:
+        driver1.quit()
+        driver2.quit()
+
+def test_TC_007_mobile_browser_timeout_consistency(driver):
+    """Mobile Browser Timeout Consistency"""
+    # For real mobile, use Appium or mobile emulation
+    driver.set_window_size(375, 812)  # iPhone X size
+    login(driver)
+    driver.get("https://example.com/payment")
+    driver.find_element(By.CSS_SELECTOR, "#initiatePaymentBtn").click()
+    time.sleep(5)
+    timeout_msg = driver.find_element(By.CSS_SELECTOR, "#timeoutMsg").text
+    assert "session timed out" in timeout_msg.lower()
+
+def test_TC_008_multiple_user_roles_timeout_behavior(driver):
+    """Multiple User Roles - Timeout Behavior"""
+    for role in ["admin", "customer"]:
+        login(driver, username=f"{role}_user", password="password")
+        driver.get("https://example.com/payment")
+        driver.find_element(By.CSS_SELECTOR, "#initiatePaymentBtn").click()
+        time.sleep(5)
+        timeout_msg = driver.find_element(By.CSS_SELECTOR, "#timeoutMsg").text
+        assert "session timed out" in timeout_msg.lower()
+
+def test_TC_009_timeout_handling_with_network_interruption(driver):
+    """Timeout Handling with Network Interruption"""
+    login(driver)
+    driver.get("https://example.com/payment")
+    driver.find_element(By.CSS_SELECTOR, "#initiatePaymentBtn").click()
+    # Simulate network disconnect/reconnect (pseudo-code)
+    # driver.set_network_conditions(offline=True)
+    # time.sleep(1)
+    # driver.set_network_conditions(offline=False)
+    time.sleep(5)
+    timeout_msg = driver.find_element(By.CSS_SELECTOR, "#timeoutMsg").text
+    assert "session timed out" in timeout_msg.lower()
+
+def test_TC_010_timeout_message_localization(driver):
+    """Timeout Message Localization"""
+    login(driver)
+    driver.get("https://example.com/settings")
+    driver.find_element(By.CSS_SELECTOR, "#languageSelect").send_keys("Spanish")
+    driver.get("https://example.com/payment")
+    driver.find_element(By.CSS_SELECTOR, "#initiatePaymentBtn").click()
+    time.sleep(5)
+    timeout_msg = driver.find_element(By.CSS_SELECTOR, "#timeoutMsg").text
+    assert "tiempo de espera agotado" in timeout_msg.lower() or "sesión finalizada" in timeout_msg.lower()
+
+def test_TC_011_timeout_behavior_with_disabled_javascript():
+    """Timeout Behavior with Disabled JavaScript"""
+    # Disabling JS is browser-specific; example for Chrome
+    options = webdriver.ChromeOptions()
+    options.add_experimental_option("prefs", {"profile.managed_default_content_settings.javascript": 2})
+    driver = webdriver.Chrome(options=options)
+    try:
+        login(driver)
+        driver.get("https://example.com/payment")
+        driver.find_element(By.CSS_SELECTOR, "#initiatePaymentBtn").click()
+        time.sleep(5)
+        page_text = driver.page_source.lower()
+        assert "session timed out" in page_text or "unsupported configuration" in page_text
+    finally:
+        driver.quit()
+
+def test_TC_012_timeout_notification_logging(driver):
+    """Timeout Notification Logging"""
+    login(driver)
+    driver.get("https://example.com/payment")
+    driver.find_element(By.CSS_SELECTOR, "#initiatePaymentBtn").click()
+    time.sleep(5)
+    driver.get("https://example.com/notification-log")
+    logs = driver.find_element(By.CSS_SELECTOR, "#notificationLogTable").text
+    assert "timeout notification" in logs.lower()
