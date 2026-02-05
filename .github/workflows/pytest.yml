@@ -27,7 +27,12 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      # Step 4: Run pytest
+      # Step 4: Add src to PYTHONPATH
+      - name: Set PYTHONPATH
+        run: |
+          echo "PYTHONPATH=$PWD/src" >> $GITHUB_ENV
+
+      # Step 5: Run pytest
       - name: Run tests
         run: |
-          pytest
+          pytest tests/
