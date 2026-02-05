@@ -1,6 +1,15 @@
 import pytest
 from selenium import webdriver
 from selenium.webdriver.common.by import By
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+import time
+import logging
+
+# Configure logging
+logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(message)s')
+
+# --- Fixtures for Setup and Teardown ---
 
 @pytest.fixture(scope="function")
 def driver():
@@ -9,127 +18,141 @@ def driver():
     yield driver
     driver.quit()
 
-def login(driver, username, password):
-    driver.get("https://example.com/login")
-    driver.find_element(By.CSS_SELECTOR, "#username").send_keys(username)
-    driver.find_element(By.CSS_SELECTOR, "#password").send_keys(password)
-    driver.find_element(By.CSS_SELECTOR, "#loginBtn").click()
+@pytest.fixture
+def valid_user_credentials():
+    # Replace with secure credential management in production
+    return {"username": "testuser", "password": "Test@123"}
 
-def open_form_page(driver):
-    driver.get("https://example.com/form")
+@pytest.fixture
+def admin_credentials():
+    return {"username": "adminuser", "password": "Admin@123"}
 
-def logout(driver):
-    driver.find_element(By.CSS_SELECTOR, "#logoutBtn").click()
+# --- Helper Functions ---
 
-def test_TC_01_verify_login_with_valid_credentials(driver):
-    """
-    TC_01: Verify login with valid credentials
-    Preconditions: Valid username/password
-    Steps: Open URL; Enter valid username; Enter valid password; Click Login
-    """
-    login(driver, "valid_user", "valid_pass")
-    assert driver.current_url.endswith("/dashboard")
-    assert "Dashboard" in driver.title
+def login(driver, credentials):
+    logging.info("Logging in as user: %s", credentials["username"])
+    driver.get("https://your-app-domain.com/login")
+    driver.find_element(By.ID, "username").send_keys(credentials["username"])
+    driver.find_element(By.ID, "password").send_keys(credentials["password"])
+    driver.find_element(By.ID, "loginBtn").click()
+    # Wait for dashboard or home page as login confirmation
+    WebDriverWait(driver, 10).until(
+        EC.presence_of_element_located((By.ID, "dashboard"))
+    )
 
-def test_TC_02_verify_login_with_invalid_password(driver):
-    """
-    TC_02: Verify login with invalid password
-    Preconditions: Invalid password
-    Steps: Open URL; Enter valid username; Enter invalid password; Click Login
-    """
-    login(driver, "valid_user", "invalid_pass")
-    error = driver.find_element(By.CSS_SELECTOR, "#errorMsg")
-    assert error.is_displayed()
-    assert "Error" in error.text
+def navigate_to_payment_page(driver):
+    logging.info("Navigating to the payment page")
+    driver.find_element(By.ID, "nav-payment").click()
+    WebDriverWait(driver, 10).until(
+        EC.presence_of_element_located((By.ID, "payment-form"))
+    )
 
-def test_TC_03_verify_login_with_empty_fields(driver):
-    """
-    TC_03: Verify login with empty fields
-    Steps: Open URL; Click Login without entering data
-    """
-    driver.get("https://example.com/login")
-    driver.find_element(By.CSS_SELECTOR, "#loginBtn").click()
-    validation = driver.find_element(By.CSS_SELECTOR, "#validationMsg")
-    assert validation.is_displayed()
-    assert "required" in validation.text.lower()
+def initiate_payment_without_authorization(driver):
+    logging.info("Initiating payment without completing authorization")
+    driver.find_element(By.ID, "amount").send_keys("100")
+    driver.find_element(By.ID, "payBtn").click()
+    # Assume authorization modal appears
+    WebDriverWait(driver, 10).until(
+        EC.presence_of_element_located((By.ID, "authorization-modal"))
+    )
+    # Do not complete authorization, just wait
 
-def test_TC_04_verify_application_url_opens_in_browser(driver):
-    """
-    TC_04: Verify application URL opens in browser
-    Preconditions: Application URL
-    Steps: Launch Chrome; Enter application URL
-    """
-    driver.get("https://example.com/")
-    assert "Example Application" in driver.title
+def wait_for_timeout(duration_seconds=300):
+    logging.info("Waiting for %d seconds to trigger timeout", duration_seconds)
+    time.sleep(duration_seconds)  # Consider mocking time in real automation
 
-def test_TC_05_verify_dashboard_link_navigation(driver):
-    """
-    TC_05: Verify dashboard link navigation
-    Steps: Login; Click Dashboard link
-    """
-    login(driver, "valid_user", "valid_pass")
-    driver.find_element(By.CSS_SELECTOR, "#dashboardLink").click()
-    assert driver.current_url.endswith("/dashboard")
-    assert "Dashboard" in driver.title
+def assert_timeout_error_message(driver):
+    logging.info("Asserting timeout error message is displayed")
+    timeout_msg = WebDriverWait(driver, 15).until(
+        EC.visibility_of_element_located((By.ID, "timeout-error"))
+    )
+    assert "timeout" in timeout_msg.text.lower(), "Timeout error message not found!"
 
-def test_TC_06_verify_broken_link_behavior(driver):
-    """
-    TC_06: Verify broken link behavior
-    Preconditions: Link
-    Steps: Click target link
-    """
-    driver.get("https://example.com/")
-    driver.find_element(By.CSS_SELECTOR, "#targetLink").click()
-    assert "404" not in driver.page_source
-    assert driver.current_url != "about:blank"
+def re_initiate_payment(driver):
+    logging.info("Attempting to re-initiate payment")
+    driver.find_element(By.ID, "amount").clear()
+    driver.find_element(By.ID, "amount").send_keys("50")
+    driver.find_element(By.ID, "payBtn").click()
+    # Wait for payment form/modal to confirm process started
+    WebDriverWait(driver, 10).until(
+        EC.presence_of_element_located((By.ID, "authorization-modal"))
+    )
 
-def test_TC_07_submit_form_with_valid_data(driver):
-    """
-    TC_07: Submit form with valid data
-    Preconditions: Valid form data
-    Steps: Open form page; Enter valid details; Click Submit
-    """
-    open_form_page(driver)
-    driver.find_element(By.CSS_SELECTOR, "#name").send_keys("Test User")
-    driver.find_element(By.CSS_SELECTOR, "#email").send_keys("test@example.com")
-    driver.find_element(By.CSS_SELECTOR, "#submitBtn").click()
-    success = driver.find_element(By.CSS_SELECTOR, "#successMsg")
-    assert success.is_displayed()
-    assert "submitted successfully" in success.text.lower()
+def login_as_admin(driver, credentials):
+    logging.info("Logging in as admin: %s", credentials["username"])
+    driver.get("https://your-app-domain.com/admin/login")
+    driver.find_element(By.ID, "username").send_keys(credentials["username"])
+    driver.find_element(By.ID, "password").send_keys(credentials["password"])
+    driver.find_element(By.ID, "loginBtn").click()
+    WebDriverWait(driver, 10).until(
+        EC.presence_of_element_located((By.ID, "admin-dashboard"))
+    )
 
-def test_TC_08_submit_form_with_empty_mandatory_fields(driver):
-    """
-    TC_08: Submit form with empty mandatory fields
-    Steps: Open form page; Leave mandatory fields empty; Click Submit
-    """
-    open_form_page(driver)
-    driver.find_element(By.CSS_SELECTOR, "#submitBtn").click()
-    errors = driver.find_elements(By.CSS_SELECTOR, ".error")
-    assert any(e.is_displayed() for e in errors)
+def access_audit_logs(driver):
+    logging.info("Accessing audit logs")
+    driver.find_element(By.ID, "nav-audit-logs").click()
+    WebDriverWait(driver, 10).until(
+        EC.presence_of_element_located((By.ID, "audit-log-table"))
+    )
 
-def test_TC_09_verify_page_title(driver):
-    """
-    TC_09: Verify page title
-    Steps: Open application
-    """
-    driver.get("https://example.com/")
-    assert driver.title == "Expected Page Title"
+def assert_timeout_event_logged(driver, username):
+    logging.info("Asserting timeout event is logged for user: %s", username)
+    audit_table = driver.find_element(By.ID, "audit-log-table")
+    rows = audit_table.find_elements(By.TAG_NAME, "tr")
+    found = False
+    for row in rows:
+        if "timeout" in row.text.lower() and username in row.text:
+            found = True
+            break
+    assert found, f"Timeout event for user {username} not found in audit log!"
 
-def test_TC_10_verify_logo_visibility(driver):
-    """
-    TC_10: Verify logo visibility
-    Steps: Open application
-    """
-    driver.get("https://example.com/")
-    logo = driver.find_element(By.CSS_SELECTOR, "#logo")
-    assert logo.is_displayed()
+# --- Test Cases ---
 
-def test_TC_11_verify_logout_functionality(driver):
+@pytest.mark.high
+def test_verify_payment_authorization_timeout_trigger(driver, valid_user_credentials):
     """
-    TC_11: Verify logout functionality
-    Steps: Login; Click Logout
+    TC-001: Verify Payment Authorization Timeout Trigger
+    Preconditions: User has an active account and sufficient balance
     """
-    login(driver, "valid_user", "valid_pass")
-    logout(driver)
-    assert driver.current_url.endswith("/login")
-    assert "Login" in driver.title
+    login(driver, valid_user_credentials)
+    navigate_to_payment_page(driver)
+    initiate_payment_without_authorization(driver)
+    wait_for_timeout(duration_seconds=300)  # 5 minutes
+    assert_timeout_error_message(driver)
+
+@pytest.mark.medium
+def test_verify_system_response_after_timeout(driver, valid_user_credentials):
+    """
+    TC-002: Verify System Response After Timeout
+    Preconditions: Previous payment session has timed out
+    """
+    login(driver, valid_user_credentials)
+    navigate_to_payment_page(driver)
+    initiate_payment_without_authorization(driver)
+    wait_for_timeout(duration_seconds=300)
+    assert_timeout_error_message(driver)
+    # Attempt to re-initiate payment immediately
+    re_initiate_payment(driver)
+    # Assert new payment process is allowed (e.g., modal appears)
+    modal = WebDriverWait(driver, 10).until(
+        EC.presence_of_element_located((By.ID, "authorization-modal"))
+    )
+    assert modal.is_displayed(), "New payment process could not be started after timeout"
+
+@pytest.mark.low
+def test_verify_audit_logging_for_timeout_events(driver, admin_credentials, valid_user_credentials):
+    """
+    TC-003: Verify Audit Logging for Timeout Events
+    Preconditions: Admin access to audit log system
+    """
+    # Trigger timeout event as a regular user
+    login(driver, valid_user_credentials)
+    navigate_to_payment_page(driver)
+    initiate_payment_without_authorization(driver)
+    wait_for_timeout(duration_seconds=300)
+    assert_timeout_error_message(driver)
+    # Log out and login as admin
+    driver.get("https://your-app-domain.com/logout")
+    login_as_admin(driver, admin_credentials)
+    access_audit_logs(driver)
+    assert_timeout_event_logged(driver, valid_user_credentials["username"])
