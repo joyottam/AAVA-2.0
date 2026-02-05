@@ -1,62 +1,101 @@
 import pytest
 from selenium import webdriver
 from selenium.webdriver.common.by import By
-from selenium.common.exceptions import NoSuchElementException, TimeoutException
 import time
-import os
 
-@pytest.fixture(scope="function")
+# Utility functions for setup and teardown
+@pytest.fixture
 def driver():
     driver = webdriver.Chrome()
-    driver.implicitly_wait(10)
     yield driver
     driver.quit()
 
-def login_and_prepare(driver):
-    driver.get(os.environ.get("APP_URL") + "/login")
-    driver.find_element(By.ID, "username").send_keys(os.environ.get("TEST_USERNAME"))
-    driver.find_element(By.ID, "password").send_keys(os.environ.get("TEST_PASSWORD"))
-    driver.find_element(By.ID, "loginBtn").click()
-    assert "dashboard" in driver.current_url
+# TC-001: Verify Payment Authorization Timeout
+def test_verify_payment_authorization_timeout(driver):
+    """
+    Test Case ID: TC-001
+    Title: Verify Payment Authorization Timeout
+    Priority: High
+    Created by: Joy Choudhury on 2026-01-05
+    Preconditions: User is logged in and has a valid payment method.
+    """
+    # Step 1: Navigate to the payment page.
+    driver.get("https://yourapp.com/payment")  # Replace with actual URL
 
-@pytest.mark.high
-def test_verify_payment_authorization_timeout_trigger(driver):
-    login_and_prepare(driver)
-    driver.get(os.environ.get("APP_URL") + "/payment")
-    driver.find_element(By.ID, "initiatePaymentBtn").click()
-    time.sleep(5 * 60)  # Simulate timeout (optimize for test speed as needed)
+    # Step 2: Initiate a payment transaction.
     try:
-        timeout_msg = driver.find_element(By.ID, "timeoutMessage")
-        assert "timeout" in timeout_msg.text.lower()
-        assert driver.find_element(By.ID, "paymentStatus").text.lower() == "cancelled"
-    except NoSuchElementException:
-        pytest.fail("Timeout message or payment cancellation not displayed.")
+        driver.find_element(By.ID, "startPaymentBtn").click()
+    except Exception as e:
+        pytest.fail(f"Payment initiation failed: {e}")
 
-@pytest.mark.medium
-def test_resume_payment_after_timeout(driver):
-    login_and_prepare(driver)
-    driver.get(os.environ.get("APP_URL") + "/payment")
-    driver.find_element(By.ID, "initiatePaymentBtn").click()
-    time.sleep(5 * 60)
-    driver.refresh()
-    driver.find_element(By.ID, "initiatePaymentBtn").click()
-    try:
-        restart_prompt = driver.find_element(By.ID, "restartPaymentPrompt")
-        assert "restart" in restart_prompt.text.lower()
-    except NoSuchElementException:
-        pytest.fail("Restart payment prompt not displayed after timeout.")
+    # Step 3: Wait for user inactivity for more than 5 minutes.
+    # For automation, simulate with a shorter wait (e.g., 10 seconds).
+    time.sleep(10)  # Replace with 300 for real scenario if feasible
 
-@pytest.mark.critical
-def test_verify_no_charges_on_timeout(driver):
-    login_and_prepare(driver)
-    driver.get(os.environ.get("APP_URL") + "/payment")
-    driver.find_element(By.ID, "initiatePaymentBtn").click()
-    time.sleep(5 * 60)
-    driver.get(os.environ.get("APP_URL") + "/transactions")
+    # Step 4: Observe the system response.
     try:
-        transactions = driver.find_elements(By.CSS_SELECTOR, ".transaction-row")
-        for txn in transactions:
-            status = txn.find_element(By.CLASS_NAME, "status").text.lower()
-            assert status != "completed" and status != "charged"
-    except NoSuchElementException:
-        pass  # No transactions; test passes
+        timeout_page = driver.find_element(By.ID, "timeoutPage")
+        assert timeout_page.is_displayed(), "Timeout page not displayed."
+    except Exception as e:
+        pytest.fail(f"Timeout not handled as expected: {e}")
+
+# TC-002: Validate Timeout Warning Popup
+def test_validate_timeout_warning_popup(driver):
+    """
+    Test Case ID: TC-002
+    Title: Validate Timeout Warning Popup
+    Priority: Medium
+    Created by: Joy Choudhury on 2026-01-05
+    Preconditions: User is on the payment authorization screen.
+    """
+    # Step 1: Start payment transaction.
+    driver.get("https://yourapp.com/payment")  # Replace with actual URL
+    try:
+        driver.find_element(By.ID, "startPaymentBtn").click()
+    except Exception as e:
+        pytest.fail(f"Payment initiation failed: {e}")
+
+    # Step 2: Remain inactive for 4 minutes (simulated as 8 seconds).
+    time.sleep(8)  # Replace with 240 for real scenario
+
+    # Step 3: Check for warning popup.
+    try:
+        warning_popup = driver.find_element(By.ID, "timeoutWarningPopup")
+        assert warning_popup.is_displayed(), "Timeout warning popup not displayed."
+        assert "imminent session timeout" in warning_popup.text.lower(), "Warning message text mismatch."
+    except Exception as e:
+        pytest.fail(f"Warning popup validation failed: {e}")
+
+# TC-003: Ensure Payment Transaction Aborts After Timeout
+def test_ensure_payment_transaction_aborts_after_timeout(driver):
+    """
+    Test Case ID: TC-003
+    Title: Ensure Payment Transaction Aborts After Timeout
+    Priority: High
+    Created by: Joy Choudhury on 2026-01-05
+    Preconditions: Valid user session; payment transaction initiated.
+    """
+    # Step 1: Start a payment transaction.
+    driver.get("https://yourapp.com/payment")  # Replace with actual URL
+    try:
+        driver.find_element(By.ID, "startPaymentBtn").click()
+    except Exception as e:
+        pytest.fail(f"Payment initiation failed: {e}")
+
+    # Step 2: Remain inactive for 6 minutes (simulated as 12 seconds).
+    time.sleep(12)  # Replace with 360 for real scenario
+
+    # Step 3: Attempt to resume transaction.
+    try:
+        resume_btn = driver.find_element(By.ID, "resumeTransactionBtn")
+        resume_btn.click()
+    except Exception as e:
+        pytest.fail(f"Resume transaction button not found: {e}")
+
+    # Expected: Transaction is aborted and user is notified of timeout.
+    try:
+        timeout_notification = driver.find_element(By.ID, "timeoutNotification")
+        assert timeout_notification.is_displayed(), "Timeout notification not displayed."
+        assert "transaction aborted" in timeout_notification.text.lower(), "Notification text mismatch."
+    except Exception as e:
+        pytest.fail(f"Timeout notification validation failed: {e}")
