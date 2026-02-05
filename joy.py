@@ -1,222 +1,151 @@
+# test_payment_authorization.py
+
 import pytest
 import time
 from selenium import webdriver
 from selenium.webdriver.common.by import By
-from selenium.common.exceptions import NoSuchElementException, TimeoutException
+from selenium.common.exceptions import NoSuchElementException
 
-# Utility functions (placeholders for login, payment initiation, log verification, etc.)
-def login_user(driver):
-    # TODO: Implement login steps
-    pass
-
-def configure_payment_method(driver):
-    # TODO: Configure payment method if needed
-    pass
-
-def initiate_payment(driver, method=None):
-    # TODO: Implement payment initiation
-    # method: 'Credit Card', 'Netbanking', etc.
-    pass
-
-def trigger_timeout(driver, wait_minutes=5):
-    # Simulate user inactivity
-    time.sleep(wait_minutes * 60)
-
-def check_timeout_popup(driver):
-    # TODO: Locate and return the timeout popup element
-    # Example: return driver.find_element(By.CSS_SELECTOR, "#timeoutPopup")
-    pass
-
-def cancel_authorization(driver):
-    # TODO: Click 'Cancel' button during authorization
-    pass
-
-def check_application_logs():
-    # TODO: Implement log access and verification
-    pass
-
-def check_session_status(driver):
-    # TODO: Verify session is still active
-    pass
-
-def disconnect_network():
-    # TODO: Simulate network disconnection
-    pass
-
-def reconnect_network():
-    # TODO: Restore network connection
-    pass
-
-def access_admin_panel(driver):
-    # TODO: Access admin panel for configuration checks
-    pass
-
-def verify_timeout_configuration(driver, expected_duration):
-    # TODO: Verify timeout configuration matches expected_duration
-    pass
-
-def follow_recovery_instructions(driver):
-    # TODO: Implement recovery flow after timeout
-    pass
-
-@pytest.fixture
+# --- Fixtures ---
+@pytest.fixture(scope="function")
 def driver():
+    # Setup: Initialize Chrome WebDriver
     driver = webdriver.Chrome()
     driver.implicitly_wait(10)
     yield driver
+    # Teardown: Quit browser
     driver.quit()
 
-# TC-001: Verify Payment Authorization Timeout
-def test_tc_001_verify_payment_authorization_timeout(driver):
-    """Preconditions: User is logged in; payment method is configured"""
-    login_user(driver)
-    configure_payment_method(driver)
-    initiate_payment(driver)
-    trigger_timeout(driver, wait_minutes=5)
-    try:
-        popup = check_timeout_popup(driver)
-        assert popup is not None, "Timeout popup not displayed"
-        assert "timeout" in popup.text.lower(), "Timeout message not found in popup"
-        # Additional assertion: payment authorization is cancelled
-        # TODO: Verify authorization status is 'cancelled'
-    except (NoSuchElementException, TimeoutException) as e:
-        pytest.fail(f"Timeout popup not found or authorization not cancelled: {e}")
+# --- Helper Functions (Placeholders for demonstration) ---
+def login_user(driver):
+    # TODO: Implement login steps based on application specifics
+    driver.get("https://your-app-url.com/login")
+    driver.find_element(By.CSS_SELECTOR, "#username").send_keys("testuser")
+    driver.find_element(By.CSS_SELECTOR, "#password").send_keys("password")
+    driver.find_element(By.CSS_SELECTOR, "#loginBtn").click()
 
-# TC-002: Timeout Message Display Validation
-def test_tc_002_timeout_message_display_validation(driver):
-    """Preconditions: Session is active"""
-    login_user(driver)
-    initiate_payment(driver)
-    trigger_timeout(driver, wait_minutes=5)
-    try:
-        popup = check_timeout_popup(driver)
-        assert popup is not None, "Timeout popup not displayed"
-        # TODO: Replace with actual expected message
-        expected_message = "Your session has timed out due to inactivity."
-        assert expected_message in popup.text, f"Expected timeout message not found. Found: {popup.text}"
-    except (NoSuchElementException, TimeoutException) as e:
-        pytest.fail(f"Timeout popup/message validation failed: {e}")
+def enter_valid_card_details(driver):
+    # TODO: Replace selectors with actual values
+    driver.find_element(By.CSS_SELECTOR, "#cardNumber").send_keys("4111111111111111")
+    driver.find_element(By.CSS_SELECTOR, "#expiryDate").send_keys("12/25")
+    driver.find_element(By.CSS_SELECTOR, "#cvv").send_keys("123")
 
-# TC-003: Re-attempt Payment After Timeout
-def test_tc_003_reattempt_payment_after_timeout(driver):
-    """Preconditions: Timeout has occurred in previous attempt"""
-    login_user(driver)
-    initiate_payment(driver)
-    trigger_timeout(driver, wait_minutes=5)
-    # Assume timeout occurred
-    # Attempt to re-initiate payment
-    initiate_payment(driver)
-    # TODO: Verify payment initiation is allowed post-timeout
-    # Example: check for payment page or confirmation
+def submit_payment(driver):
+    driver.find_element(By.CSS_SELECTOR, "#submitPaymentBtn").click()
 
-# TC-004: Cancel Payment During Authorization
-def test_tc_004_cancel_payment_during_authorization(driver):
-    """Preconditions: User is in authorization flow"""
-    login_user(driver)
-    initiate_payment(driver)
-    cancel_authorization(driver)
-    # Wait less than timeout duration
-    time.sleep(60)
-    # Verify no timeout popup
+def wait_for_timeout(duration=600):
+    # Simulate waiting for a timeout (10 minutes = 600 seconds)
+    time.sleep(duration)
+
+def assert_element_text(driver, selector, expected_text):
     try:
-        popup = check_timeout_popup(driver)
-        assert popup is None, "Timeout popup should not be displayed after cancellation"
+        elem = driver.find_element(By.CSS_SELECTOR, selector)
+        assert elem.text == expected_text, f"Expected '{expected_text}' but got '{elem.text}'"
     except NoSuchElementException:
-        pass  # Expected: no popup
+        pytest.fail(f"Element with selector '{selector}' not found.")
 
-# TC-005: Timeout Logging Verification
-def test_tc_005_timeout_logging_verification(driver):
-    """Preconditions: User performs a timeout event"""
-    login_user(driver)
-    initiate_payment(driver)
-    trigger_timeout(driver, wait_minutes=5)
-    # Check application logs for timeout event
-    log_entry = check_application_logs()
-    assert log_entry is not None, "Timeout event not logged"
-    # TODO: Validate timestamp and user details in log_entry
+def assert_element_disabled(driver, selector):
+    elem = driver.find_element(By.CSS_SELECTOR, selector)
+    assert not elem.is_enabled(), f"Element '{selector}' should be disabled after timeout."
 
-# TC-006: Session Retention After Timeout
-def test_tc_006_session_retention_after_timeout(driver):
-    """Preconditions: User is logged in"""
-    login_user(driver)
-    initiate_payment(driver)
-    trigger_timeout(driver, wait_minutes=5)
-    # Check session status
-    session_active = check_session_status(driver)
-    assert session_active, "Session should remain active after payment timeout"
+def assert_session_active(driver):
+    # TODO: Implement session check (e.g., check for logout button, session cookies)
+    pass
 
-# TC-007: Authorization Timeout for Different Payment Methods
-@pytest.mark.parametrize("method", ["Credit Card", "Netbanking"])
-def test_tc_007_authorization_timeout_for_different_payment_methods(driver, method):
-    """Preconditions: Multiple payment methods enabled"""
-    login_user(driver)
-    configure_payment_method(driver)
-    initiate_payment(driver, method=method)
-    trigger_timeout(driver, wait_minutes=5)
-    try:
-        popup = check_timeout_popup(driver)
-        assert popup is not None, f"Timeout popup not displayed for {method}"
-    except (NoSuchElementException, TimeoutException) as e:
-        pytest.fail(f"Timeout popup not found for {method}: {e}")
+def assert_audit_trail(driver):
+    # TODO: Implement audit log verification (may require DB or API access)
+    pass
 
-# TC-008: UI Consistency of Timeout Message
-def test_tc_008_ui_consistency_of_timeout_message(driver):
-    """Preconditions: Timeout event triggered"""
-    login_user(driver)
-    initiate_payment(driver)
-    trigger_timeout(driver, wait_minutes=5)
-    popup = check_timeout_popup(driver)
-    assert popup is not None, "Timeout popup not displayed"
-    # TODO: Validate UI guidelines (font, color, layout, etc.)
-    # Example: assert popup.value_of_css_property('font-size') == '16px'
+def assert_log_entry(driver):
+    # TODO: Implement log verification (may require backend log access)
+    pass
 
-# TC-009: Timeout Handling on Mobile Devices
-@pytest.mark.mobile
-def test_tc_009_timeout_handling_on_mobile_devices(driver):
-    """Preconditions: Mobile app installed"""
-    # TODO: Use Appium or mobile WebDriver for mobile automation
-    # Placeholder for mobile device test
-    login_user(driver)
-    initiate_payment(driver)
-    trigger_timeout(driver, wait_minutes=5)
-    popup = check_timeout_popup(driver)
-    assert popup is not None, "Timeout message not shown on mobile UI"
+# --- Test Cases ---
 
-# TC-010: Authorization Timeout - Edge Case (Network Fluctuation)
-def test_tc_010_authorization_timeout_edge_case_network_fluctuation(driver):
-    """Preconditions: Unstable network connection"""
+def test_TC_001_verify_successful_payment_authorization(driver):
+    """
+    TC-001: Verify successful payment authorization
+    Preconditions: User is logged in; valid card is available
+    """
     login_user(driver)
-    initiate_payment(driver)
-    disconnect_network()
-    time.sleep(30)  # Briefly disconnect
-    reconnect_network()
-    trigger_timeout(driver, wait_minutes=5)
-    try:
-        popup = check_timeout_popup(driver)
-        assert popup is not None, "Timeout did not occur gracefully"
-        assert "timeout" in popup.text.lower(), "User not informed about timeout"
-    except (NoSuchElementException, TimeoutException) as e:
-        pytest.fail(f"Timeout handling failed during network fluctuation: {e}")
+    driver.get("https://your-app-url.com/payment")  # TODO: Replace with actual URL
+    enter_valid_card_details(driver)
+    submit_payment(driver)
+    # Assert confirmation message
+    assert_element_text(driver, "#confirmationMsg", "Payment is authorized and confirmation message is displayed")
 
-# TC-011: Timeout Configuration Validation
-def test_tc_011_timeout_configuration_validation(driver):
-    """Preconditions: Admin access to configuration"""
+def test_TC_002_verify_payment_authorization_timeout(driver):
+    """
+    TC-002: Verify payment authorization timeout
+    Preconditions: User is logged in
+    """
     login_user(driver)
-    access_admin_panel(driver)
-    expected_duration = 5  # minutes
-    verify_timeout_configuration(driver, expected_duration)
-    initiate_payment(driver)
-    start_time = time.time()
-    trigger_timeout(driver, wait_minutes=expected_duration)
-    end_time = time.time()
-    actual_duration = (end_time - start_time) / 60
-    assert abs(actual_duration - expected_duration) < 0.5, f"Timeout duration mismatch: expected {expected_duration}, got {actual_duration:.2f}"
+    driver.get("https://your-app-url.com/payment")  # TODO: Replace with actual URL
+    enter_valid_card_details(driver)
+    # Do not submit, wait for timeout
+    wait_for_timeout(duration=600)  # 10 minutes
+    # Assert timeout message
+    assert_element_text(driver, "#timeoutMsg", "Timeout error message is displayed")
 
-# TC-012: Timeout Recovery Flow
-def test_tc_012_timeout_recovery_flow(driver):
-    """Preconditions: Timeout event occurred"""
+def test_TC_003_verify_retry_after_payment_timeout(driver):
+    """
+    TC-003: Verify retry after payment timeout
+    Preconditions: Previous payment attempt has timed out
+    """
     login_user(driver)
-    initiate_payment(driver)
-    trigger_timeout(driver, wait_minutes=5)
-    follow_recovery_instructions(driver)
-    # TODO: Verify user can retry payment after recovery
+    driver.get("https://your-app-url.com/payment")
+    enter_valid_card_details(driver)
+    wait_for_timeout(duration=600)
+    # Retry payment
+    submit_payment(driver)
+    assert_element_text(driver, "#confirmationMsg", "Payment is processed successfully")
+
+def test_TC_004_verify_error_logging_on_payment_timeout(driver):
+    """
+    TC-004: Verify error logging on payment timeout
+    Preconditions: User has valid credentials
+    """
+    login_user(driver)
+    driver.get("https://your-app-url.com/payment")
+    enter_valid_card_details(driver)
+    wait_for_timeout(duration=600)
+    # Assert log entry (requires backend or log access)
+    assert_log_entry(driver)  # TODO: Implement log verification
+
+def test_TC_005_verify_ui_disables_payment_button_during_timeout(driver):
+    """
+    TC-005: Verify UI disables payment button during timeout
+    Preconditions: User is on payment page
+    """
+    login_user(driver)
+    driver.get("https://your-app-url.com/payment")
+    enter_valid_card_details(driver)
+    # Start payment process
+    driver.find_element(By.CSS_SELECTOR, "#startPaymentBtn").click()
+    wait_for_timeout(duration=600)
+    # Assert payment button is disabled
+    assert_element_disabled(driver, "#submitPaymentBtn")
+
+def test_TC_006_verify_session_handling_on_payment_timeout(driver):
+    """
+    TC-006: Verify session handling on payment timeout
+    Preconditions: User is logged in
+    """
+    login_user(driver)
+    driver.get("https://your-app-url.com/payment")
+    enter_valid_card_details(driver)
+    wait_for_timeout(duration=600)
+    # Assert user session is still active
+    assert_session_active(driver)  # TODO: Implement session check
+
+def test_TC_007_verify_audit_trail_creation_for_timed_out_payments(driver):
+    """
+    TC-007: Verify audit trail creation for timed out payments
+    Preconditions: User has audit permissions
+    """
+    login_user(driver)
+    driver.get("https://your-app-url.com/payment")
+    enter_valid_card_details(driver)
+    wait_for_timeout(duration=600)
+    # Assert audit trail entry exists (requires backend/API access)
+    assert_audit_trail(driver)  # TODO: Implement audit trail verification
