@@ -1,181 +1,234 @@
-#
-# Production-Ready Python Selenium Test Suite with Documentation
-#
-
-"""
-Executive Summary
-- Codebase processed: Conversion of 3 manual test cases from Jira ticket PJM-8 (Implement Payment Authorization Timeout, SIT Release) and Excel attachment (Manual_Test_Cases.xlsx) into production-ready Python Selenium automation scripts using PyTest.
-- Key achievements: 100% conversion success rate; all test cases validated against schema and mapped to executable scripts; no parsing errors; robust error handling and QA best practices applied.
-- Success metrics: All test cases mapped 1:1 with manual steps and assertions; scripts pass static analysis and dry-run functional validation; maintainable, modular, and CI/CD-ready code.
-- Recommendations: Parameterize test data, expand parser for more formats, integrate with enterprise test management tools, automate reporting and feedback.
-"""
-
-# conftest.py (Reusable Fixtures & Helpers)
 import pytest
 from selenium import webdriver
 from selenium.webdriver.common.by import By
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+import time
+import requests
 
 @pytest.fixture(scope="function")
 def driver():
-    options = webdriver.ChromeOptions()
-    options.add_argument("--headless")  # Remove if UI is needed
-    driver = webdriver.Chrome(options=options)
-    driver.implicitly_wait(10)
+    driver = webdriver.Chrome()
+    driver.maximize_window()
     yield driver
     driver.quit()
 
-def login_user(driver, username="testuser", password="password123"):
-    driver.get("https://payment-portal.example.com/login")
-    driver.find_element(By.ID, "username").send_keys(username)
-    driver.find_element(By.ID, "password").send_keys(password)
-    driver.find_element(By.ID, "loginBtn").click()
-    # Assert login success
-    assert driver.find_element(By.ID, "dashboard"), "Login failed or dashboard not found"
-
-def set_locale(driver, locale_code="es"):
-    driver.get("https://payment-portal.example.com/settings")
-    locale_dropdown = driver.find_element(By.ID, "locale")
-    locale_dropdown.click()
-    driver.find_element(By.XPATH, f"//option[@value='{locale_code}']").click()
-    driver.find_element(By.ID, "saveSettings").click()
-
-# test_payment_authorization.py (Test Cases)
-import time
-
-import pytest
-from selenium.webdriver.common.by import By
-
-@pytest.mark.high
-def test_payment_authorization_timeout(driver):
+# TC-001: Verify Payment Authorization Timeout
+def test_tc_001_verify_payment_authorization_timeout(driver):
     """
-    TC-001: Verify Payment Authorization Timeout
-    Preconditions: User is logged in; payment gateway is operational
-    Steps:
-      1. Initiate payment transaction
-      2. Wait for 30 seconds without authorization
-      3. Observe system response
-    Expected Result: System displays timeout error and cancels transaction
+    Preconditions: User has valid payment method
+    Priority: High | Created by: Joy Choudhury | Created: 2026-01-05
     """
-    login_user(driver)
-    # Step 1: Initiate payment transaction
-    driver.get("https://payment-portal.example.com/payments")
-    driver.find_element(By.ID, "newPaymentBtn").click()
-    driver.find_element(By.ID, "amount").send_keys("100")
-    driver.find_element(By.ID, "payNowBtn").click()
-    # Step 2: Wait for 30 seconds without authorizing
-    time.sleep(30)
-    # Step 3: Observe system response
+    driver.get("https://payment-portal.example.com/")  # Placeholder URL
+    # Step 1: Navigate to Payment Portal
+    # Already navigated above
+    # Step 2: Initiate Payment
+    driver.find_element(By.ID, "initiatePaymentBtn").click()  # Placeholder selector
+    # Step 3: Wait for authorization response for 35 seconds
     try:
-        error_elem = driver.find_element(By.ID, "timeoutError")
-        assert "timeout" in error_elem.text.lower(), "Timeout error message not displayed"
-        # Optionally, verify transaction cancellation
-        status_elem = driver.find_element(By.ID, "transactionStatus")
-        assert status_elem.text.lower() == "cancelled", "Transaction not cancelled after timeout"
+        WebDriverWait(driver, 40).until(
+            EC.visibility_of_element_located((By.CSS_SELECTOR, ".timeout-error-msg"))
+        )
+        error_msg = driver.find_element(By.CSS_SELECTOR, ".timeout-error-msg").text
+        assert "timeout" in error_msg.lower(), "Timeout error message not displayed"
     except Exception as e:
-        pytest.fail(f"Timeout error or cancellation not handled as expected: {e}")
+        pytest.fail(f"Timeout error message was not displayed: {e}")
 
-@pytest.mark.medium
-def test_successful_payment_authorization_within_timeout(driver):
+# TC-002: Check Successful Payment Within Timeout
+def test_tc_002_check_successful_payment_within_timeout(driver):
     """
-    TC-002: Verify Successful Payment Authorization Within Timeout
-    Preconditions: User is logged in; payment gateway is operational
-    Steps:
-      1. Initiate payment transaction
-      2. Authorize payment within 30 seconds
-      3. Confirm transaction completion
-    Expected Result: Payment is authorized and transaction completes successfully
+    Preconditions: User has valid payment method
+    Priority: Critical | Created by: Joy Choudhury | Created: 2026-01-05
     """
-    login_user(driver)
-    driver.get("https://payment-portal.example.com/payments")
-    driver.find_element(By.ID, "newPaymentBtn").click()
-    driver.find_element(By.ID, "amount").send_keys("100")
-    driver.find_element(By.ID, "payNowBtn").click()
-    # Step 2: Authorize payment within 30 seconds
-    driver.find_element(By.ID, "authorizeBtn").click()
-    # Step 3: Confirm transaction completion
-    try:
-        confirmation = driver.find_element(By.ID, "successMsg")
-        assert "authorized" in confirmation.text.lower() or "success" in confirmation.text.lower(), \
-            "Payment not authorized or transaction not completed"
-        status_elem = driver.find_element(By.ID, "transactionStatus")
-        assert status_elem.text.lower() == "completed", "Transaction status not completed"
-    except Exception as e:
-        pytest.fail(f"Payment authorization or completion failed: {e}")
+    driver.get("https://payment-portal.example.com/")
+    driver.find_element(By.ID, "initiatePaymentBtn").click()
+    # Simulate completing authorization within 20 seconds
+    # (Assume a modal appears; fill and submit quickly)
+    WebDriverWait(driver, 20).until(
+        EC.visibility_of_element_located((By.ID, "authModal"))
+    )
+    driver.find_element(By.ID, "authApproveBtn").click()
+    # Assert payment is processed successfully
+    WebDriverWait(driver, 10).until(
+        EC.visibility_of_element_located((By.CSS_SELECTOR, ".success-msg"))
+    )
+    success_msg = driver.find_element(By.CSS_SELECTOR, ".success-msg").text
+    assert "success" in success_msg.lower(), "Payment was not processed successfully"
 
-@pytest.mark.low
-def test_timeout_message_localization(driver):
+# TC-003: Validate Error Message on Timeout
+def test_tc_003_validate_error_message_on_timeout(driver):
     """
-    TC-003: Verify Timeout Message Localization
-    Preconditions: User locale is set to non-English; payment gateway is operational
-    Steps:
-      1. Initiate payment transaction in non-English locale
-      2. Wait for authorization timeout
-      3. Observe timeout message
-    Expected Result: Timeout message is displayed in selected language
+    Preconditions: User session is active
+    Priority: Medium | Created by: Joy Choudhury | Created: 2026-01-05
     """
-    login_user(driver)
-    set_locale(driver, locale_code="es")  # Example: Spanish
-    driver.get("https://payment-portal.example.com/payments")
-    driver.find_element(By.ID, "newPaymentBtn").click()
-    driver.find_element(By.ID, "amount").send_keys("100")
-    driver.find_element(By.ID, "payNowBtn").click()
-    time.sleep(30)  # Wait for timeout
-    try:
-        error_elem = driver.find_element(By.ID, "timeoutError")
-        timeout_text = error_elem.text
-        # Example expected phrase in Spanish
-        assert "tiempo de espera" in timeout_text.lower() or "expirado" in timeout_text.lower(), \
-            f"Timeout message not localized: {timeout_text}"
-    except Exception as e:
-        pytest.fail(f"Localized timeout error not displayed as expected: {e}")
+    driver.get("https://payment-portal.example.com/")
+    driver.find_element(By.ID, "initiatePaymentBtn").click()
+    # Do not respond to authorization; wait for timeout
+    WebDriverWait(driver, 40).until(
+        EC.visibility_of_element_located((By.CSS_SELECTOR, ".timeout-error-msg"))
+    )
+    error_msg = driver.find_element(By.CSS_SELECTOR, ".timeout-error-msg").text
+    assert "authorization timeout" in error_msg.lower(), "Expected 'Authorization Timeout' error not shown"
 
-"""
-Comprehensive Documentation
+# TC-004: Verify No Double Charge on Timeout
+def test_tc_004_verify_no_double_charge_on_timeout(driver):
+    """
+    Preconditions: User initiates payment
+    Priority: High | Created by: QA Analyst | Created: 2026-01-05
+    """
+    driver.get("https://payment-portal.example.com/")
+    driver.find_element(By.ID, "initiatePaymentBtn").click()
+    # Let authorization timeout
+    WebDriverWait(driver, 40).until(
+        EC.visibility_of_element_located((By.CSS_SELECTOR, ".timeout-error-msg"))
+    )
+    # Check transaction records (navigate to account/transactions)
+    driver.find_element(By.ID, "accountMenu").click()
+    driver.find_element(By.ID, "transactionsTab").click()
+    transactions = driver.find_elements(By.CSS_SELECTOR, ".transaction-row")
+    # Assert no new charge posted
+    for txn in transactions:
+        assert "pending" not in txn.text.lower(), "Pending/double charge found after timeout"
 
-Step-by-Step Guide:
-1. Install Python 3.8+, ChromeDriver/GeckoDriver, and dependencies:
-   pip install selenium pytest pytest-html
-2. Place conftest.py and test_payment_authorization.py in your test directory.
-3. Run tests:
-   pytest --maxfail=1 --disable-warnings -v
-4. Generate HTML report:
-   pytest --html=report.html
-5. Update element selectors and URLs to match your application.
+# TC-005: Check Audit Log Entry for Timeout Event
+def test_tc_005_check_audit_log_entry_for_timeout_event(driver):
+    """
+    Preconditions: Audit logging is enabled
+    Priority: Medium | Created by: QA Analyst | Created: 2026-01-05
+    """
+    driver.get("https://payment-portal.example.com/")
+    driver.find_element(By.ID, "initiatePaymentBtn").click()
+    # Trigger payment timeout
+    WebDriverWait(driver, 40).until(
+        EC.visibility_of_element_located((By.CSS_SELECTOR, ".timeout-error-msg"))
+    )
+    # Access audit log (admin panel)
+    driver.get("https://payment-portal.example.com/admin/audit-log")
+    audit_entries = driver.find_elements(By.CSS_SELECTOR, ".audit-entry")
+    assert any("timeout" in entry.text.lower() for entry in audit_entries), "Timeout event not found in audit log"
 
-Maintenance Procedures:
-- Review/update selectors as UI changes.
-- Secure credentials via environment variables.
-- Extend helper functions as login/locale logic evolves.
-- Add new test cases by following the existing structure.
+# TC-006: Validate UI Feedback During Timeout
+def test_tc_006_validate_ui_feedback_during_timeout(driver):
+    """
+    Preconditions: User is logged in
+    Priority: Low | Created by: Joy Choudhury | Created: 2026-01-05
+    """
+    driver.get("https://payment-portal.example.com/")
+    driver.find_element(By.ID, "initiatePaymentBtn").click()
+    # Progress indicator should be visible
+    assert driver.find_element(By.CSS_SELECTOR, ".progress-indicator").is_displayed(), "Progress indicator not visible"
+    # Wait for timeout message
+    WebDriverWait(driver, 40).until(
+        EC.visibility_of_element_located((By.CSS_SELECTOR, ".timeout-error-msg"))
+    )
+    assert not driver.find_element(By.CSS_SELECTOR, ".progress-indicator").is_displayed(), "Progress indicator still visible after timeout"
+    assert driver.find_element(By.CSS_SELECTOR, ".timeout-error-msg").is_displayed(), "Timeout message not shown"
 
-Troubleshooting Guide:
-- Element not found: Update selectors, check waits.
-- Login failed: Verify credentials, page accessibility.
-- Localization failed: Ensure locale is set, verify language pack.
-- Driver error: Update driver to match browser.
+# TC-007: Verify System Recovery Post Timeout
+def test_tc_007_verify_system_recovery_post_timeout(driver):
+    """
+    Preconditions: Previous payment timed out
+    Priority: Medium | Created by: QA Analyst | Created: 2026-01-05
+    """
+    driver.get("https://payment-portal.example.com/")
+    driver.find_element(By.ID, "initiatePaymentBtn").click()
+    WebDriverWait(driver, 40).until(
+        EC.visibility_of_element_located((By.CSS_SELECTOR, ".timeout-error-msg"))
+    )
+    # Attempt new payment
+    driver.find_element(By.ID, "initiatePaymentBtn").click()
+    WebDriverWait(driver, 10).until(
+        EC.visibility_of_element_located((By.CSS_SELECTOR, ".payment-form"))
+    )
+    assert driver.find_element(By.CSS_SELECTOR, ".payment-form").is_displayed(), "System did not allow new payment after timeout"
 
-Diagnostic Procedures:
-- Use browser dev tools for selector validation.
-- Enable Selenium verbose logging.
-- Isolate failures with --maxfail=1.
+# TC-008: Test Authorization Timeout with Invalid Credentials
+def test_tc_008_test_authorization_timeout_with_invalid_credentials(driver):
+    """
+    Preconditions: User account exists
+    Priority: Low | Created by: Joy Choudhury | Created: 2026-01-05
+    """
+    driver.get("https://payment-portal.example.com/")
+    driver.find_element(By.ID, "initiatePaymentBtn").click()
+    # Enter invalid credentials
+    driver.find_element(By.ID, "authUser").send_keys("invalid_user")
+    driver.find_element(By.ID, "authPass").send_keys("wrong_pass")
+    driver.find_element(By.ID, "authSubmitBtn").click()
+    # Wait for timeout
+    WebDriverWait(driver, 40).until(
+        EC.visibility_of_element_located((By.CSS_SELECTOR, ".timeout-error-msg"))
+    )
+    error_msg = driver.find_element(By.CSS_SELECTOR, ".timeout-error-msg").text
+    assert "error" in error_msg.lower(), "Appropriate error not displayed for invalid credentials"
 
-Support Resources:
-- Selenium and PyTest documentation.
-- Internal QA team channels.
+# TC-009: Check Timeout Handling for Multiple Concurrent Payments
+def test_tc_009_check_timeout_handling_for_multiple_concurrent_payments(driver):
+    """
+    Preconditions: Multiple payment sessions are supported
+    Priority: High | Created by: QA Analyst | Created: 2026-01-05
+    """
+    driver.get("https://payment-portal.example.com/")
+    # Initiate multiple payments (simulate with multiple tabs/windows)
+    for i in range(2):
+        driver.execute_script("window.open('https://payment-portal.example.com/', '_blank');")
+    handles = driver.window_handles
+    for handle in handles:
+        driver.switch_to.window(handle)
+        driver.find_element(By.ID, "initiatePaymentBtn").click()
+    # Let all authorizations timeout
+    for handle in handles:
+        driver.switch_to.window(handle)
+        WebDriverWait(driver, 40).until(
+            EC.visibility_of_element_located((By.CSS_SELECTOR, ".timeout-error-msg"))
+        )
+        error_msg = driver.find_element(By.CSS_SELECTOR, ".timeout-error-msg").text
+        assert "timeout" in error_msg.lower(), "Timeout not handled independently for each payment"
 
-Recommendations for Future Improvements:
-- Parameterize inputs for data-driven testing.
-- Integrate with test management/reporting tools.
-- Expand parser for more formats (docx, pdf).
-- Automate reporting and feedback loops.
-- Implement parallel execution for performance.
-- Add API-level backend checks.
-- Schedule regular reviews for script and dependency updates.
-- Collect test run metrics for continuous improvement.
+# TC-010: Verify Notification Sent on Timeout
+def test_tc_010_verify_notification_sent_on_timeout(driver):
+    """
+    Preconditions: Notification service is enabled
+    Priority: Medium | Created by: Joy Choudhury | Created: 2026-01-05
+    """
+    driver.get("https://payment-portal.example.com/")
+    driver.find_element(By.ID, "initiatePaymentBtn").click()
+    WebDriverWait(driver, 40).until(
+        EC.visibility_of_element_located((By.CSS_SELECTOR, ".timeout-error-msg"))
+    )
+    # Check user notifications (notification bell or inbox)
+    driver.find_element(By.ID, "notificationBell").click()
+    notifications = driver.find_elements(By.CSS_SELECTOR, ".notification-item")
+    assert any("timeout" in n.text.lower() for n in notifications), "No timeout notification received"
 
-Continuous Monitoring & Sustainability:
-- Integrate test scripts into CI/CD pipelines.
-- Track test coverage, failure rates, and performance metrics.
-- Plan for regular updates and maintenance.
-- Ensure knowledge transfer via documentation and onboarding guides.
-"""
+# TC-011: Validate Session Remains Active After Timeout
+def test_tc_011_validate_session_remains_active_after_timeout(driver):
+    """
+    Preconditions: Session timeout is longer than payment timeout
+    Priority: Low | Created by: QA Analyst | Created: 2026-01-05
+    """
+    driver.get("https://payment-portal.example.com/")
+    driver.find_element(By.ID, "initiatePaymentBtn").click()
+    WebDriverWait(driver, 40).until(
+        EC.visibility_of_element_located((By.CSS_SELECTOR, ".timeout-error-msg"))
+    )
+    # Perform another action (e.g., navigate to dashboard)
+    driver.find_element(By.ID, "dashboardMenu").click()
+    assert driver.current_url.endswith("/dashboard"), "User session is not active after payment timeout"
+
+# TC-012: Check API Response for Timeout
+def test_tc_012_check_api_response_for_timeout():
+    """
+    Preconditions: API key is valid
+    Priority: High | Created by: Joy Choudhury | Created: 2026-01-05
+    """
+    api_url = "https://api.payment-portal.example.com/payments"
+    headers = {"Authorization": "Bearer <API_KEY>"}  # Replace <API_KEY> with valid key
+    payload = {
+        "amount": 100,
+        "method": "card",
+        "simulate_delay": True,
+        "delay_seconds": 40
+    }
+    response = requests.post(api_url, json=payload, headers=headers, timeout=60)
+    assert response.status_code == 408, f"Expected timeout status code 408, got {response.status_code}"
+    assert "timeout" in response.text.lower(), "Timeout error not present in API response"
